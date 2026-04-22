@@ -12,9 +12,6 @@ A needlessly overengineered auto-trader for the Cookie Clicker stock market mini
 
 ### Option 1 — Bookmarklet (easiest)
 
-Open [install.html](https://YOUR_USERNAME.github.io/cctrader/) on the hosted GitHub Pages site, then drag the big button to your bookmarks bar. Click it while the Cookie Clicker tab is open.
-
-Or make it yourself:
 1. Create a new bookmark in your browser
 2. Name it "CCTrader"
 3. Paste the contents of [`dist/bookmarklet.txt`](dist/bookmarklet.txt) as the URL
