@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CCTrader — A Cookie Clicker Stock Auto-Trader</title>
+<meta name="description" content="Monte Carlo forecast of Cookie Clicker stock prices. Drag the button, click in-game, watch it trade.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,700;0,9..144,900;1,9..144,400&family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f0ebe0;
+    --ink: #181512;
+    --panel: #1a1612;
+    --panel-2: #221c16;
+    --accent-green: #68b456;
+    --accent-green-bright: #8ed876;
+    --accent-red: #c24b3a;
+    --accent-gold: #d4a94c;
+    --rule: rgba(208, 194, 160, 0.15);
+    --dim: #8a7f6a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--panel); color: var(--paper); font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; line-height: 1.55; }
+  body {
+    background-image:
+      radial-gradient(circle at 20% 10%, rgba(104, 180, 86, 0.05) 0%, transparent 40%),
+      radial-gradient(circle at 85% 80%, rgba(212, 169, 76, 0.04) 0%, transparent 45%),
+      repeating-linear-gradient(0deg, transparent 0 2px, rgba(255,255,255,0.008) 2px 3px);
+    min-height: 100vh;
+  }
+  /* ——— Top ticker ——— */
+  .ticker {
+    overflow: hidden;
+    border-bottom: 1px solid var(--rule);
+    background: var(--panel-2);
+    padding: 10px 0;
+    white-space: nowrap;
+    font-size: 12px;
+  }
+  .ticker-track { display: inline-block; animation: scroll 90s linear infinite; padding-left: 100%; }
+  .ticker-item { display: inline-block; margin-right: 42px; letter-spacing: 0.05em; }
+  .ticker-item .sym { color: var(--accent-gold); }
+  .ticker-item .up { color: var(--accent-green-bright); }
+  .ticker-item .down { color: var(--accent-red); }
+  @keyframes scroll { from { transform: translateX(0); } to { transform: translateX(-100%); } }
+
+  /* ——— Masthead ——— */
+  .mast {
+    padding: 56px 32px 40px;
+    max-width: 1080px;
+    margin: 0 auto;
+    border-bottom: 3px double var(--rule);
+  }
+  .mast .eyebrow {
+    font-size: 10px;
+    letter-spacing: 0.28em;
+    color: var(--accent-gold);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .mast h1 {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 900;
+    font-size: clamp(48px, 9vw, 112px);
+    line-height: 0.92;
+    letter-spacing: -0.04em;
+    margin-bottom: 28px;
+    color: var(--paper);
+  }
+  .mast h1 .italic { font-style: italic; font-weight: 400; color: var(--accent-green); }
+  .mast .tagline {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: clamp(18px, 2vw, 22px);
+    font-style: italic;
+    color: var(--dim);
+    max-width: 680px;
+    line-height: 1.4;
+  }
+  .mast .dateline {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid var(--rule);
+    font-size: 11px;
+    color: var(--dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .mast .dateline span strong { color: var(--paper); font-weight: 500; }
+
+  /* ——— Install CTA ——— */
+  .install-section {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 48px 32px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 48px;
+    align-items: center;
+    border-bottom: 1px solid var(--rule);
+  }
+  @media (max-width: 820px) { .install-section { grid-template-columns: 1fr; gap: 32px; } }
+
+  .install-label {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 34px;
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    margin-bottom: 16px;
+  }
+  .install-label em { font-style: italic; color: var(--accent-green); font-weight: 400; }
+  .install-desc { color: var(--dim); margin-bottom: 16px; }
+  .install-desc strong { color: var(--paper); font-weight: 500; }
+  .install-steps { list-style: none; counter-reset: step; }
+  .install-steps li { counter-increment: step; position: relative; padding-left: 36px; margin-bottom: 12px; color: var(--paper); }
+  .install-steps li::before {
+    content: counter(step);
+    position: absolute; left: 0; top: -2px;
+    width: 24px; height: 24px;
+    border: 1px solid var(--accent-gold);
+    border-radius: 50%;
+    color: var(--accent-gold);
+    font-size: 11px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 500;
+  }
+
+  .drag-zone {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 260px;
+    border: 2px dashed var(--rule);
+    border-radius: 4px;
+    background: var(--panel-2);
+    overflow: hidden;
+  }
+  .drag-zone::before {
+    content: '← DRAG TO BOOKMARKS BAR';
+    position: absolute;
+    top: 12px;
+    left: 16px;
+    font-size: 9px;
+    letter-spacing: 0.3em;
+    color: var(--dim);
+  }
+  .drag-zone::after {
+    content: 'CLICK-AND-HOLD, THEN DROP';
+    position: absolute;
+    bottom: 12px;
+    right: 16px;
+    font-size: 9px;
+    letter-spacing: 0.3em;
+    color: var(--dim);
+  }
+  .bookmarklet {
+    display: inline-block;
+    padding: 18px 38px;
+    background: linear-gradient(180deg, #2a2118 0%, #18120e 100%);
+    color: var(--accent-green-bright);
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-decoration: none;
+    border: 1px solid var(--accent-green);
+    border-radius: 2px;
+    cursor: grab;
+    transition: all 0.15s ease;
+    box-shadow: 0 0 0 1px rgba(104, 180, 86, 0.2), 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04);
+    position: relative;
+  }
+  .bookmarklet::before {
+    content: '▶';
+    margin-right: 12px;
+    color: var(--accent-green);
+    font-size: 14px;
+  }
+  .bookmarklet:hover {
+    background: linear-gradient(180deg, #352a1f 0%, #231a13 100%);
+    color: #a8e890;
+    box-shadow: 0 0 0 1px var(--accent-green), 0 12px 40px rgba(104,180,86,0.15), inset 0 1px 0 rgba(255,255,255,0.08);
+    transform: translateY(-1px);
+  }
+  .bookmarklet:active { cursor: grabbing; transform: translateY(0); }
+
+  /* ——— Alt install ——— */
+  .alt-installs {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 48px 32px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+    border-bottom: 1px solid var(--rule);
+  }
+  @media (max-width: 820px) { .alt-installs { grid-template-columns: 1fr; } }
+  .alt-install { padding: 20px; background: var(--panel-2); border: 1px solid var(--rule); border-radius: 2px; }
+  .alt-install h3 {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 20px;
+    margin-bottom: 8px;
+    color: var(--paper);
+  }
+  .alt-install p { font-size: 13px; color: var(--dim); margin-bottom: 12px; }
+  .alt-install a {
+    color: var(--accent-gold);
+    text-decoration: none;
+    border-bottom: 1px solid rgba(212, 169, 76, 0.3);
+    transition: border-color 0.15s;
+  }
+  .alt-install a:hover { border-bottom-color: var(--accent-gold); }
+
+  /* ——— Body copy ——— */
+  .doc { max-width: 860px; margin: 0 auto; padding: 64px 32px; }
+  .doc h2 {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 36px;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    margin: 56px 0 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .doc h2:first-child { margin-top: 0; }
+  .doc h3 {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 22px;
+    font-weight: 700;
+    margin: 32px 0 8px;
+  }
+  .doc p { margin-bottom: 14px; color: #e0d9c7; }
+  .doc code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    background: var(--panel-2);
+    padding: 2px 6px;
+    border-radius: 2px;
+    color: var(--accent-green-bright);
+    border: 1px solid var(--rule);
+  }
+  .doc pre {
+    background: var(--panel-2);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--accent-green);
+    padding: 16px 20px;
+    overflow-x: auto;
+    margin: 16px 0;
+    border-radius: 2px;
+    font-size: 12.5px;
+  }
+  .doc pre code { background: none; border: none; padding: 0; color: #e0d9c7; }
+  .doc pre code .kw { color: var(--accent-red); }
+  .doc pre code .str { color: var(--accent-gold); }
+  .doc pre code .fn { color: var(--accent-green-bright); }
+  .doc pre code .cmt { color: var(--dim); font-style: italic; }
+  .doc ul { margin: 12px 0 16px 24px; color: #e0d9c7; }
+  .doc ul li { margin-bottom: 6px; }
+  .doc a { color: var(--accent-gold); text-decoration: none; border-bottom: 1px solid rgba(212, 169, 76, 0.3); }
+  .doc a:hover { border-bottom-color: var(--accent-gold); }
+
+  /* ——— Stats strip ——— */
+  .stats {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 32px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--rule);
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+  }
+  @media (max-width: 820px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+  .stat { background: var(--panel); padding: 28px 20px; text-align: center; }
+  .stat .num {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 42px;
+    font-weight: 700;
+    color: var(--accent-green-bright);
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+  .stat .lbl {
+    font-size: 10px;
+    letter-spacing: 0.24em;
+    color: var(--dim);
+    text-transform: uppercase;
+  }
+
+  /* ——— Decision table ——— */
+  .dec-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0 24px;
+    font-size: 12.5px;
+  }
+  .dec-table th {
+    background: var(--panel-2);
+    color: var(--accent-gold);
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 500;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--rule);
+  }
+  .dec-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--rule);
+    color: #e0d9c7;
+  }
+  .dec-table tbody tr:hover { background: rgba(104, 180, 86, 0.03); }
+  .dec-table .action-buy { color: var(--accent-green-bright); font-weight: 500; }
+  .dec-table .action-sell { color: var(--accent-red); font-weight: 500; }
+  .dec-table .action-hold { color: var(--dim); }
+
+  /* ——— Footer ——— */
+  footer {
+    padding: 48px 32px;
+    text-align: center;
+    color: var(--dim);
+    font-size: 12px;
+    border-top: 3px double var(--rule);
+  }
+  footer a { color: var(--accent-gold); text-decoration: none; }
+  footer .fine { font-size: 10px; margin-top: 12px; letter-spacing: 0.1em; color: #6a5f4a; }
+</style>
+</head>
+<body>
+
+<!-- ——— FAKE TICKER ——— -->
+<div class="ticker" aria-hidden="true">
+  <div class="ticker-track">
+    <span class="ticker-item"><span class="sym">CRL</span> $5.30 <span class="up">▲ 7.54%</span></span>
+    <span class="ticker-item"><span class="sym">CHC</span> $4.57 <span class="up">▲ 6.62%</span></span>
+    <span class="ticker-item"><span class="sym">BTR</span> $10.20 <span class="up">▲ 1.60%</span></span>
+    <span class="ticker-item"><span class="sym">SUG</span> $2.89 <span class="up">▲ 189.19%</span></span>
+    <span class="ticker-item"><span class="sym">NUT</span> $4.89 <span class="down">▼ 0.57%</span></span>
+    <span class="ticker-item"><span class="sym">SLT</span> $3.72 <span class="down">▼ 26.71%</span></span>
+    <span class="ticker-item"><span class="sym">VNL</span> $47.45 <span class="up">▲ 1.33%</span></span>
+    <span class="ticker-item"><span class="sym">EGG</span> $81.09 <span class="up">▲ 0.85%</span></span>
+    <span class="ticker-item"><span class="sym">CNM</span> $80.06 <span class="up">▲ 0.86%</span></span>
+    <span class="ticker-item"><span class="sym">CRL</span> $5.30 <span class="up">▲ 7.54%</span></span>
+    <span class="ticker-item"><span class="sym">CHC</span> $4.57 <span class="up">▲ 6.62%</span></span>
+    <span class="ticker-item"><span class="sym">BTR</span> $10.20 <span class="up">▲ 1.60%</span></span>
+    <span class="ticker-item"><span class="sym">SUG</span> $2.89 <span class="up">▲ 189.19%</span></span>
+    <span class="ticker-item"><span class="sym">NUT</span> $4.89 <span class="down">▼ 0.57%</span></span>
+    <span class="ticker-item"><span class="sym">SLT</span> $3.72 <span class="down">▼ 26.71%</span></span>
+  </div>
+</div>
+
+<!-- ——— MASTHEAD ——— -->
+<section class="mast">
+  <div class="eyebrow">The Dough Jones Dispatch · Vol. II, No. 4</div>
+  <h1>CC<span class="italic">Trader</span></h1>
+  <p class="tagline">A needlessly overengineered auto-trader for the Cookie Clicker stock market — runs a Monte Carlo forecast on the game's exact per-tick dynamics, then trades on expected value. 200 simulations per stock. ~0.65% CPU.</p>
+  <div class="dateline">
+    <span><strong>v2.4.2</strong></span>
+    <span>~28 KB minified</span>
+    <span>bookmarklet · userscript · console</span>
+    <span>MIT license</span>
+  </div>
+</section>
+
+<!-- ——— DRAGGABLE CTA ——— -->
+<section class="install-section">
+  <div>
+    <h2 class="install-label">Drag the button to <em>your bookmarks bar</em>.</h2>
+    <p class="install-desc">That's it. <strong>No install, no extension, no permissions.</strong> Open Cookie Clicker in a tab, click the bookmark, a panel appears. Click it again later to toggle the trader off.</p>
+    <ol class="install-steps">
+      <li>Make sure your bookmarks bar is visible (<code>Ctrl</code>+<code>Shift</code>+<code>B</code> in most browsers).</li>
+      <li>Click and drag the button on the right to any spot on the bar.</li>
+      <li>Open <a href="https://orteil.dashnet.org/cookieclicker/" target="_blank" rel="noopener">Cookie Clicker</a>, upgrade a Bank to level 1 to unlock the stock market, then click the bookmark.</li>
+    </ol>
+  </div>
+  <div class="drag-zone">
+    <a id="bm" class="bookmarklet" draggable="true">CCTrader ▲</a>
+  </div>
+</section>
+
+<!-- ——— ALT INSTALLS ——— -->
+<section class="alt-installs">
+  <div class="alt-install">
+    <h3>Userscript</h3>
+    <p>Auto-runs on every game reload. Recommended if you play regularly.</p>
+    <a href="dist/cctrader.user.js">Install .user.js →</a>
+    <p style="margin-top:8px;font-size:11px;">Needs <a href="https://www.tampermonkey.net/" target="_blank" rel="noopener">Tampermonkey</a> or <a href="https://violentmonkey.github.io/" target="_blank" rel="noopener">Violentmonkey</a>.</p>
+  </div>
+  <div class="alt-install">
+    <h3>Console paste</h3>
+    <p>Copy the minified blob, open DevTools (<code>F12</code>), paste in the console.</p>
+    <a href="dist/cctrader.min.js">View .min.js →</a>
+  </div>
+  <div class="alt-install">
+    <h3>Source</h3>
+    <p>Read the code, fork, modify. 80 KB of heavily-commented vanilla JS.</p>
+    <a href="src/cctrader.js">View cctrader.js →</a>
+  </div>
+</section>
+
+<!-- ——— STATS ——— -->
+<section class="stats">
+  <div class="stat"><div class="num">200</div><div class="lbl">Sims / Stock / Tick</div></div>
+  <div class="stat"><div class="num">40</div><div class="lbl">Tick Horizon</div></div>
+  <div class="stat"><div class="num">6</div><div class="lbl">Stock Modes</div></div>
+  <div class="stat"><div class="num">0.65%</div><div class="lbl">CPU Use</div></div>
+</section>
+
+<!-- ——— BODY COPY ——— -->
+<article class="doc">
+
+<h2>What it does</h2>
+<p>Once loaded, a floating panel appears in the top-left showing five paper-traded strategies plus the live bot. The live bot (<strong>Sim-EV ★</strong>) uses the game-accurate forecast to decide buys and sells every tick. The others are benchmarks — they show you that the forecast is actually earning its keep versus simpler rules.</p>
+<p>Panel header has an <strong>Auto-trade: ON/OFF</strong> toggle — flip off to keep forecasting and paper-trading without spending cookies. Rows in the in-game market panel get tinted <span style="color:var(--accent-green-bright)">green</span> when the bot would buy, <span style="color:var(--accent-red)">red</span> when it would sell.</p>
+
+<h2>How the forecast works</h2>
+<p>Cookie Clicker's stock market rules are fully documented on the wiki. Each tick, every stock is updated by a known set of operations involving delta decay, reversion to resting value, random fluctuations, and mode-specific effects. The trader reads the current <code>(value, delta, mode, modeAge)</code> of every stock directly from the game state, then runs 200 forward simulations 40 ticks ahead using these exact rules.</p>
+<p>Mean endpoint price becomes the forecast μ. Standard deviation becomes σ. The trader then computes:</p>
+
+<pre><code><span class="kw">const</span> buyEV  = forecast_mean − price × (1 + overhead) − λ × σ;
+<span class="kw">const</span> sellEV = price − forecast_mean − λ × σ;</code></pre>
+
+<p>Decisions are thresholded on these:</p>
+
+<table class="dec-table">
+  <thead>
+    <tr><th>Action</th><th>Condition</th><th>Default threshold</th></tr>
+  </thead>
+  <tbody>
+    <tr><td class="action-buy">BUY</td><td>buyEV &gt; minBuyEdge AND room to buy</td><td>$0.10/unit</td></tr>
+    <tr><td class="action-sell">SELL</td><td>sellEV &gt; minSellEdge AND hold any</td><td>$0.10/unit</td></tr>
+    <tr><td class="action-hold">HOLD</td><td>neither edge clears</td><td>—</td></tr>
+  </tbody>
+</table>
+
+<p>Default <code>λ = 0</code> — risk-neutral, only expected value matters. Bump it up if you want the bot to chicken out on uncertain trades.</p>
+
+<h2>Console API</h2>
+<p>Everything is exposed via <code>window.CCTrader</code>:</p>
+
+<pre><code><span class="cmt">// Control</span>
+CCTrader.<span class="fn">start</span>()                  <span class="cmt">// resume the tick hook</span>
+CCTrader.<span class="fn">stop</span>()                   <span class="cmt">// pause</span>
+CCTrader.<span class="fn">uninstall</span>()              <span class="cmt">// remove entirely</span>
+CCTrader.<span class="fn">runOnce</span>()                <span class="cmt">// manually trigger one tick</span>
+
+<span class="cmt">// Diagnostics</span>
+CCTrader.<span class="fn">status</span>()                 <span class="cmt">// current config + stats summary</span>
+CCTrader.<span class="fn">explain</span>(<span class="str">'Farm'</span>)          <span class="cmt">// full decision breakdown for one stock</span>
+CCTrader.<span class="fn">benchmarks</span>()             <span class="cmt">// per-strategy P&amp;L table</span>
+CCTrader.<span class="fn">portfolioBreakdown</span>()     <span class="cmt">// current positions + unrealized P&amp;L</span>
+CCTrader.<span class="fn">tradeLog</span>()               <span class="cmt">// last 200 executed trades</span>
+
+<span class="cmt">// Tuning</span>
+CCTrader.<span class="fn">setConfig</span>({ horizon: <span class="str">40</span>, riskAversion: <span class="str">0.0</span> })</code></pre>
+
+<h2>Known limitations</h2>
+<ul>
+  <li><strong>Supreme Intellect</strong>: decay rate and mode duration are aura-adjusted correctly. Global spike rate, widened fluctuations, and the 50% Chaotic-override on standard mode transitions are NOT yet modeled. Decisions are reasonable with SI equipped, but forecast σ is slightly understated.</li>
+  <li><strong>Warehouse upgrades</strong>: the bot doesn't try to level up your Bank or buy Stockbrokers. Do that yourself — brokers especially make a big difference (overhead drops from 20% to 1% at 59 brokers).</li>
+  <li><strong>DOM integration for row colors</strong>: uses guessed element ID patterns. If the game updates its market UI, the colors may stop appearing. <code>CCTrader.setConfig({ colorizeStockRows: false })</code> disables cleanly.</li>
+</ul>
+
+<h2>Why</h2>
+<p>Because Cookie Clicker has a 10-year-old documented stochastic process underlying its stock market that nobody seems to have pointed a proper filter at. The game tells you the current mode. It exposes the hidden delta. The per-mode dynamics are in a table on the wiki. At that point not building this feels rude.</p>
+<p>It started as an AR(1) approximation over a hidden Markov model and got progressively more accurate as I dug further into the source. The current version simulates the game's exact rules forward 40 ticks, 200 times per stock, every minute. Forecasts take ~10 ms each; a full tick of 15 stocks is ~400 ms.</p>
+
+</article>
+
+<!-- ——— FOOTER ——— -->
+<footer>
+  <div><a href="https://github.com/YOUR_USERNAME/cctrader">View on GitHub</a> · <a href="https://github.com/YOUR_USERNAME/cctrader/issues">Report an issue</a></div>
+  <div class="fine">MIT · FOR SINGLE-PLAYER USE · NO WARRANTY, EXPRESSED OR IMPLIED</div>
+</footer>
+
+<script>
+  // Load the bookmarklet payload from dist/bookmarklet.txt at runtime and wire
+  // it up as the href of the draggable anchor. We fetch it rather than inlining
+  // because the payload is ~41 KB — keeping the page source readable matters.
+  (async () => {
+    try {
+      const res = await fetch('dist/bookmarklet.txt');
+      if (!res.ok) throw new Error('fetch failed: ' + res.status);
+      const href = (await res.text()).trim();
+      const a = document.getElementById('bm');
+      a.setAttribute('href', href);
+      // Block accidental click-navigation; dragging still works because the
+      // href is set. A click would otherwise navigate to the javascript:
+      // URL in the current tab and execute on this page, not the game.
+      a.addEventListener('click', (e) => {
+        e.preventDefault();
+        alert('To install: drag this button to your bookmarks bar.\n\nTo run: click the bookmark while Cookie Clicker is open in a tab.');
+      });
+    } catch (err) {
+      document.getElementById('bm').textContent = 'Could not load bookmarklet';
+      console.error('[CCTrader install page]', err);
+    }
+  })();
+</script>
+
+</body>
+</html>

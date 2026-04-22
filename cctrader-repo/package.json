@@ -1,0 +1,28 @@
+{
+  "name": "cctrader",
+  "version": "2.4.2",
+  "description": "Cookie Clicker stock market auto-trader with game-accurate Monte Carlo forecast",
+  "main": "src/cctrader.js",
+  "scripts": {
+    "build:min": "terser src/cctrader.js --compress passes=2 --mangle reserved=[Game,CCTrader,window,document,M,console,Math,Object,Array,JSON,Number] --output dist/cctrader.min.js",
+    "build:bookmarklet": "node -e \"const fs=require('fs'); const m=fs.readFileSync('dist/cctrader.min.js','utf8'); fs.writeFileSync('dist/bookmarklet.txt', 'javascript:'+encodeURIComponent(m));\"",
+    "build:userscript": "node scripts/build-userscript.js",
+    "build": "npm run build:min && npm run build:bookmarklet && npm run build:userscript",
+    "check": "node --check src/cctrader.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YOUR_USERNAME/cctrader.git"
+  },
+  "keywords": [
+    "cookie-clicker",
+    "bookmarklet",
+    "userscript",
+    "automation",
+    "monte-carlo"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "terser": "^5.30.0"
+  }
+}
